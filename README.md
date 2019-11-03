@@ -6,7 +6,7 @@ Keylogger program that logs all unique keystrokes into a log file. The log file 
 
 - email functionality
 
-- multi-threading design to implement dummy threads to ofiscate code
+- multi-thread design for implemention of dummy threads to ofiscate code
 
 - Microsoft virtual key conversions to string equivalents
 
