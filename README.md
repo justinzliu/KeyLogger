@@ -10,4 +10,6 @@ Keylogger program that logs all unique keystrokes into a log file. The log file 
 
 - Microsoft virtual key conversions to string equivalents
 
+- ethical hacking for educational purposes
+
 ### WORK IN PROGRESS
